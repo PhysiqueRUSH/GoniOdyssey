@@ -8,9 +8,24 @@
     <style>
         body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; background: #222; font-family: sans-serif; color: white; overflow: hidden; }
         
-        #toolbar { padding: 10px; background: #333; display: flex; gap: 8px; justify-content: space-around; align-items: center; z-index: 10; }
+        /* Toolbar optimisée : gap réduit et padding réduit pour faire tenir 4 boutons */
+        #toolbar { padding: 8px 5px; background: #333; display: flex; gap: 5px; justify-content: space-between; align-items: center; z-index: 10; }
         
-        button, label { background: #007AFF; color: white; border: none; padding: 10px; border-radius: 5px; font-size: 13px; cursor: pointer; text-align: center; flex: 1; display: flex; justify-content: center; align-items: center; }
+        /* Style des boutons et labels unifiés */
+        .btn-style { 
+            flex: 1; 
+            border: none; 
+            padding: 10px 2px; /* Padding latéral réduit */
+            border-radius: 5px; 
+            font-size: 12px; /* Police légèrement réduite */
+            cursor: pointer; 
+            text-align: center; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center;
+            color: white;
+            white-space: nowrap; /* Empêche le texte de passer à la ligne */
+        }
         
         label.camera { background: #007AFF; }
         label.gallery { background: #5856D6; }
@@ -26,14 +41,15 @@
 <body>
 
 <div id="toolbar">
-    <label for="cameraInput" class="camera">📷 Photo</label>
+    <label for="cameraInput" class="btn-style camera">📷 Photo</label>
     <input type="file" id="cameraInput" accept="image/*" capture="environment">
 
-    <label for="galleryInput" class="gallery">📂 Dossier</label>
+    <label for="galleryInput" class="btn-style gallery">📂 Galerie</label>
     <input type="file" id="galleryInput" accept="image/*">
 
-    <button id="clearBtn" class="danger">Effacer</button>
-    <button id="saveBtn" class="success">💾 Enr.</button>
+    <button id="clearBtn" class="btn-style danger">Effacer</button>
+    
+    <button id="saveBtn" class="btn-style success">💾 Enr.</button>
 </div>
 
 <div id="canvas-container">
@@ -41,8 +57,12 @@
 </div>
 
 <script>
+    // --- Gestion PWA et Cache ---
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js');
+        navigator.serviceWorker.register('./sw.js').then(reg => {
+            // Tente de mettre à jour le SW à chaque chargement
+            reg.update();
+        });
     }
 
     const canvas = document.getElementById('canvas');
@@ -55,6 +75,7 @@
     let points = []; 
     let draggingPointIdx = -1;
     
+    // Fonction commune de chargement
     const handleImageLoad = (e) => {
         if (e.target.files && e.target.files[0]) {
             const reader = new FileReader();
@@ -68,7 +89,7 @@
             }
             reader.readAsDataURL(e.target.files[0]);
         }
-        e.target.value = ''; 
+        e.target.value = ''; // Reset pour permettre de re-sélectionner
     };
 
     cameraInput.addEventListener('change', handleImageLoad);
@@ -95,17 +116,12 @@
     function getAngle(p1, p2, p3) {
         const BA = { x: p1.x - p2.x, y: p1.y - p2.y };
         const BC = { x: p3.x - p2.x, y: p3.y - p2.y };
-        
         const dotProduct = (BA.x * BC.x) + (BA.y * BC.y);
         const magBA = Math.sqrt(BA.x*BA.x + BA.y*BA.y);
         const magBC = Math.sqrt(BC.x*BC.x + BC.y*BC.y);
-        
         if (magBA === 0 || magBC === 0) return 0;
-
         let angleRad = Math.acos(Math.max(-1, Math.min(1, dotProduct / (magBA * magBC))));
-        let angleDeg = angleRad * (180 / Math.PI);
-        
-        return angleDeg.toFixed(1);
+        return (angleRad * (180 / Math.PI)).toFixed(1);
     }
 
     function draw() {
@@ -113,8 +129,16 @@
         
         if (img.src) {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        } else {
+            // Texte d'aide si pas d'image
+            ctx.fillStyle = "#555";
+            ctx.font = "14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("Choisissez une photo ou la galerie", canvas.width/2, canvas.height/2);
+            ctx.textAlign = "left";
         }
 
+        // Date
         const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
         ctx.font = "bold 20px Arial";
         ctx.fillStyle = "white";
@@ -123,6 +147,7 @@
         ctx.fillText(date, 10, 30);
         ctx.shadowBlur = 0;
 
+        // Lignes
         if (points.length > 1) {
             ctx.beginPath();
             ctx.strokeStyle = "yellow";
@@ -134,9 +159,9 @@
             ctx.stroke();
         }
 
+        // Angle
         if (points.length === 3) {
             const angle = getAngle(points[0], points[1], points[2]);
-            
             ctx.fillStyle = "rgba(0,0,0,0.6)";
             ctx.fillRect(points[1].x + 10, points[1].y - 30, 70, 25);
             ctx.fillStyle = "white";
@@ -149,6 +174,7 @@
             ctx.stroke();
         }
 
+        // Points
         points.forEach((p, index) => {
             ctx.beginPath();
             ctx.fillStyle = index === 1 ? "red" : "#007AFF";
@@ -160,6 +186,7 @@
         });
     }
 
+    // Gestion Touch/Mouse
     function getPos(e) {
         const rect = canvas.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -172,14 +199,13 @@
 
     function isOverPoint(pos) {
         return points.findIndex(p => {
-            const dist = Math.sqrt((p.x - pos.x)**2 + (p.y - pos.y)**2);
-            return dist < 25;
+            return Math.sqrt((p.x - pos.x)**2 + (p.y - pos.y)**2) < 30;
         });
     }
 
     const startHandler = (e) => {
         if (!img.src) return;
-        if (e.cancelable) e.preventDefault();
+        if (e.cancelable && e.target === canvas) e.preventDefault();
         const pos = getPos(e);
         const idx = isOverPoint(pos);
 
@@ -199,27 +225,20 @@
         }
     };
 
-    const endHandler = (e) => {
-        draggingPointIdx = -1;
-    };
+    const endHandler = () => draggingPointIdx = -1;
 
     canvas.addEventListener('mousedown', startHandler);
     canvas.addEventListener('mousemove', moveHandler);
     canvas.addEventListener('mouseup', endHandler);
-    
     canvas.addEventListener('touchstart', startHandler, {passive: false});
     canvas.addEventListener('touchmove', moveHandler, {passive: false});
     canvas.addEventListener('touchend', endHandler);
 
-    document.getElementById('clearBtn').addEventListener('click', () => {
-        points = [];
-        draw();
-    });
-
+    document.getElementById('clearBtn').addEventListener('click', () => { points = []; draw(); });
     document.getElementById('saveBtn').addEventListener('click', () => {
-        if (!img.src) return alert("Image manquante");
+        if (!img.src) return alert("Pas d'image");
         const link = document.createElement('a');
-        link.download = `GoniOdyssey-${Date.now()}.jpg`; // Nom fichier mis à jour
+        link.download = `GoniOdyssey-${Date.now()}.jpg`;
         link.href = canvas.toDataURL('image/jpeg', 0.9);
         link.click();
     });
