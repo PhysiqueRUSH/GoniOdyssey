@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_NAME = 'goniodyssey-v3'; // Changement de version pour forcer la MAJ
+const CACHE_NAME = 'goniodyssey-v4'; // Changement de version pour forcer la MAJ
 const ASSETS = [
     './',
     './index.html',
