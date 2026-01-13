@@ -1,0 +1,20 @@
+{
+  "name": "Goni0dyssey",
+  "short_name": "Goni0dyssey",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#222222",
+  "theme_color": "#333333",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192.png?text=Gonio",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://via.placeholder.com/512.png?text=Gonio",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
