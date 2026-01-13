@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gonio-v1.1';
+const CACHE_NAME = 'goniodyssey-v1';
 const ASSETS = [
     './',
     './index.html',
