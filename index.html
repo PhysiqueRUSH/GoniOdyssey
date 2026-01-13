@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GonioApp</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; background: #222; font-family: sans-serif; color: white; overflow: hidden; }
+        #toolbar { padding: 10px; background: #333; display: flex; gap: 10px; justify-content: space-between; align-items: center; z-index: 10; }
+        button, label { background: #007AFF; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-size: 14px; cursor: pointer; text-align: center; }
+        label { display: inline-block; }
+        button.danger { background: #FF3B30; }
+        button.success { background: #34C759; }
+        #canvas-container { flex-grow: 1; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; background: #000; }
+        canvas { max-width: 100%; max-height: 100%; touch-action: none; }
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="toolbar">
+    <label for="imgInput">📷 Photo</label>
+    <input type="file" id="imgInput" accept="image/*" capture="environment">
+    <button id="clearBtn" class="danger">Effacer</button>
+    <button id="saveBtn" class="success">💾 Enr.</button>
+</div>
+
+<div id="canvas-container">
+    <canvas id="canvas"></canvas>
+</div>
+
+<script>
+    // --- Configuration ---
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js');
+    }
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const imgInput = document.getElementById('imgInput');
+    
+    let img = new Image();
+    let points = []; // Stocke les objets {x, y}
+    let draggingPointIdx = -1;
+    
+    // --- Gestion Image ---
+    imgInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                img.onload = () => {
+                    resizeCanvas();
+                    points = [];
+                    draw();
+                };
+                img.src = evt.target.result;
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    });
+
+    function resizeCanvas() {
+        if (!img.src) return;
+        // Adapter le canvas à l'image tout en respectant l'écran
+        const container = document.getElementById('canvas-container');
+        const aspect = img.width / img.height;
+        const screenAspect = container.clientWidth / container.clientHeight;
+
+        if (aspect > screenAspect) {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientWidth / aspect;
+        } else {
+            canvas.height = container.clientHeight;
+            canvas.width = container.clientHeight * aspect;
+        }
+        draw();
+    }
+    
+    window.addEventListener('resize', resizeCanvas);
+
+    // --- Logique Mathématique (Vectorielle) ---
+    function getAngle(p1, p2, p3) {
+        // Vecteurs BA et BC
+        const BA = { x: p1.x - p2.x, y: p1.y - p2.y };
+        const BC = { x: p3.x - p2.x, y: p3.y - p2.y };
+        
+        // Produit scalaire
+        const dotProduct = (BA.x * BC.x) + (BA.y * BC.y);
+        const magBA = Math.sqrt(BA.x*BA.x + BA.y*BA.y);
+        const magBC = Math.sqrt(BC.x*BC.x + BC.y*BC.y);
+        
+        if (magBA === 0 || magBC === 0) return 0;
+
+        // Angle en radians puis degrés
+        let angleRad = Math.acos(Math.max(-1, Math.min(1, dotProduct / (magBA * magBC))));
+        let angleDeg = angleRad * (180 / Math.PI);
+        
+        return angleDeg.toFixed(1);
+    }
+
+    // --- Rendu Graphique ---
+    function draw() {
+        // 1. Fond image
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (img.src) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        }
+
+        // 2. Date du jour (en haut à gauche)
+        const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+        ctx.font = "bold 20px Arial";
+        ctx.fillStyle = "white";
+        ctx.shadowColor = "black";
+        ctx.shadowBlur = 4;
+        ctx.fillText(date, 10, 30);
+        ctx.shadowBlur = 0;
+
+        // 3. Lignes
+        if (points.length > 1) {
+            ctx.beginPath();
+            ctx.strokeStyle = "yellow";
+            ctx.lineWidth = 3;
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.stroke();
+        }
+
+        // 4. Angle (Si 3 points)
+        if (points.length === 3) {
+            const angle = getAngle(points[0], points[1], points[2]);
+            
+            // Affichage de la valeur près du sommet (point 2)
+            ctx.fillStyle = "rgba(0,0,0,0.6)";
+            ctx.fillRect(points[1].x + 10, points[1].y - 30, 70, 25);
+            ctx.fillStyle = "white";
+            ctx.font = "bold 16px Arial";
+            ctx.fillText(angle + "°", points[1].x + 15, points[1].y - 12);
+            
+            // Petit arc visuel
+            ctx.beginPath();
+            ctx.strokeStyle = "white";
+            ctx.arc(points[1].x, points[1].y, 20, 0, 2 * Math.PI);
+            ctx.stroke();
+        }
+
+        // 5. Points (Sommets)
+        points.forEach((p, index) => {
+            ctx.beginPath();
+            ctx.fillStyle = index === 1 ? "red" : "#007AFF"; // Le sommet est rouge
+            ctx.arc(p.x, p.y, 8, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        });
+    }
+
+    // --- Interactions Tactiles & Souris ---
+    function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+            x: (clientX - rect.left) * (canvas.width / rect.width),
+            y: (clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+
+    function isOverPoint(pos) {
+        return points.findIndex(p => {
+            const dist = Math.sqrt((p.x - pos.x)**2 + (p.y - pos.y)**2);
+            return dist < 25; // Zone de touche généreuse
+        });
+    }
+
+    const startHandler = (e) => {
+        if (!img.src) return;
+        e.preventDefault();
+        const pos = getPos(e);
+        const idx = isOverPoint(pos);
+
+        if (idx !== -1) {
+            draggingPointIdx = idx; // Mode édition
+        } else if (points.length < 3) {
+            points.push(pos); // Mode ajout
+            draw();
+        }
+    };
+
+    const moveHandler = (e) => {
+        if (draggingPointIdx !== -1) {
+            e.preventDefault();
+            points[draggingPointIdx] = getPos(e);
+            draw();
+        }
+    };
+
+    const endHandler = (e) => {
+        draggingPointIdx = -1;
+    };
+
+    canvas.addEventListener('mousedown', startHandler);
+    canvas.addEventListener('mousemove', moveHandler);
+    canvas.addEventListener('mouseup', endHandler);
+    canvas.addEventListener('touchstart', startHandler, {passive: false});
+    canvas.addEventListener('touchmove', moveHandler, {passive: false});
+    canvas.addEventListener('touchend', endHandler);
+
+    // --- Boutons ---
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        points = [];
+        draw();
+    });
+
+    document.getElementById('saveBtn').addEventListener('click', () => {
+        if (!img.src) return alert("Prenez une photo d'abord.");
+        const link = document.createElement('a');
+        link.download = `gonio-${Date.now()}.jpg`;
+        link.href = canvas.toDataURL('image/jpeg', 0.9);
+        link.click();
+    });
+</script>
+</body>
+</html>
