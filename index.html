@@ -8,27 +8,34 @@
     <style>
         body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; background: #222; font-family: sans-serif; color: white; overflow: hidden; }
         
-        /* Toolbar optimisée : gap réduit et padding réduit pour faire tenir 4 boutons */
-        #toolbar { padding: 8px 5px; background: #333; display: flex; gap: 5px; justify-content: space-between; align-items: center; z-index: 10; }
+        /* Toolbar optimisée pour 5 éléments */
+        #toolbar { padding: 8px 4px; background: #333; display: flex; gap: 4px; justify-content: space-between; align-items: center; z-index: 10; }
         
-        /* Style des boutons et labels unifiés */
+        /* Styles boutons condensés */
         .btn-style { 
             flex: 1; 
             border: none; 
-            padding: 10px 2px; /* Padding latéral réduit */
+            padding: 10px 0; 
             border-radius: 5px; 
-            font-size: 12px; /* Police légèrement réduite */
+            font-size: 11px; /* Police réduite pour tout faire tenir */
+            font-weight: bold;
             cursor: pointer; 
             text-align: center; 
             display: flex; 
             justify-content: center; 
             align-items: center;
             color: white;
-            white-space: nowrap; /* Empêche le texte de passer à la ligne */
+            white-space: nowrap; 
         }
         
+        /* Couleurs */
         label.camera { background: #007AFF; }
         label.gallery { background: #5856D6; }
+        
+        /* Bouton 180° */
+        #toggleAngleBtn { background: #8E8E93; }
+        #toggleAngleBtn.active { background: #FF9500; border: 1px solid white; } /* Orange quand actif */
+        
         button.danger { background: #FF3B30; }
         button.success { background: #34C759; }
 
@@ -44,10 +51,12 @@
     <label for="cameraInput" class="btn-style camera">📷 Photo</label>
     <input type="file" id="cameraInput" accept="image/*" capture="environment">
 
-    <label for="galleryInput" class="btn-style gallery">📂 Galerie</label>
+    <label for="galleryInput" class="btn-style gallery">📂 Dossier</label>
     <input type="file" id="galleryInput" accept="image/*">
 
-    <button id="clearBtn" class="btn-style danger">Effacer</button>
+    <button id="toggleAngleBtn" class="btn-style">📐 180°</button>
+
+    <button id="clearBtn" class="btn-style danger">❌ Raz</button>
     
     <button id="saveBtn" class="btn-style success">💾 Enr.</button>
 </div>
@@ -57,25 +66,26 @@
 </div>
 
 <script>
-    // --- Gestion PWA et Cache ---
+    // --- PWA Setup ---
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js').then(reg => {
-            // Tente de mettre à jour le SW à chaque chargement
-            reg.update();
-        });
+        navigator.serviceWorker.register('./sw.js').then(reg => reg.update());
     }
 
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     
+    // Inputs
     const cameraInput = document.getElementById('cameraInput');
     const galleryInput = document.getElementById('galleryInput');
-    
+    const toggleAngleBtn = document.getElementById('toggleAngleBtn');
+
+    // State
     let img = new Image();
     let points = []; 
     let draggingPointIdx = -1;
+    let showSupplementary = false; // false = angle réel, true = (180 - angle)
     
-    // Fonction commune de chargement
+    // --- Gestion Image ---
     const handleImageLoad = (e) => {
         if (e.target.files && e.target.files[0]) {
             const reader = new FileReader();
@@ -89,12 +99,13 @@
             }
             reader.readAsDataURL(e.target.files[0]);
         }
-        e.target.value = ''; // Reset pour permettre de re-sélectionner
+        e.target.value = ''; 
     };
 
     cameraInput.addEventListener('change', handleImageLoad);
     galleryInput.addEventListener('change', handleImageLoad);
 
+    // --- Resize Logic ---
     function resizeCanvas() {
         if (!img.src) return;
         const container = document.getElementById('canvas-container');
@@ -110,9 +121,9 @@
         }
         draw();
     }
-    
     window.addEventListener('resize', resizeCanvas);
 
+    // --- Mathématiques ---
     function getAngle(p1, p2, p3) {
         const BA = { x: p1.x - p2.x, y: p1.y - p2.y };
         const BC = { x: p3.x - p2.x, y: p3.y - p2.y };
@@ -120,21 +131,25 @@
         const magBA = Math.sqrt(BA.x*BA.x + BA.y*BA.y);
         const magBC = Math.sqrt(BC.x*BC.x + BC.y*BC.y);
         if (magBA === 0 || magBC === 0) return 0;
+        
         let angleRad = Math.acos(Math.max(-1, Math.min(1, dotProduct / (magBA * magBC))));
-        return (angleRad * (180 / Math.PI)).toFixed(1);
+        let angleDeg = angleRad * (180 / Math.PI);
+        
+        return angleDeg; // On retourne le nombre brut (float)
     }
 
+    // --- Rendu ---
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
+        // Image
         if (img.src) {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         } else {
-            // Texte d'aide si pas d'image
             ctx.fillStyle = "#555";
             ctx.font = "14px Arial";
             ctx.textAlign = "center";
-            ctx.fillText("Choisissez une photo ou la galerie", canvas.width/2, canvas.height/2);
+            ctx.fillText("Prenez une photo pour commencer", canvas.width/2, canvas.height/2);
             ctx.textAlign = "left";
         }
 
@@ -159,15 +174,27 @@
             ctx.stroke();
         }
 
-        // Angle
+        // Angle & Sommet
         if (points.length === 3) {
-            const angle = getAngle(points[0], points[1], points[2]);
-            ctx.fillStyle = "rgba(0,0,0,0.6)";
-            ctx.fillRect(points[1].x + 10, points[1].y - 30, 70, 25);
+            let angleVal = getAngle(points[0], points[1], points[2]);
+            
+            // Logique du bouton 180°
+            if (showSupplementary) {
+                angleVal = 180 - angleVal;
+            }
+
+            const angleText = angleVal.toFixed(1) + "°";
+
+            // Fond du texte
+            ctx.fillStyle = showSupplementary ? "rgba(255, 149, 0, 0.8)" : "rgba(0,0,0,0.6)"; // Orange si mode 180 actif
+            ctx.fillRect(points[1].x + 10, points[1].y - 30, 75, 25);
+            
+            // Texte
             ctx.fillStyle = "white";
             ctx.font = "bold 16px Arial";
-            ctx.fillText(angle + "°", points[1].x + 15, points[1].y - 12);
+            ctx.fillText(angleText, points[1].x + 15, points[1].y - 12);
             
+            // Arc
             ctx.beginPath();
             ctx.strokeStyle = "white";
             ctx.arc(points[1].x, points[1].y, 20, 0, 2 * Math.PI);
@@ -186,7 +213,20 @@
         });
     }
 
-    // Gestion Touch/Mouse
+    // --- Interactions ---
+    
+    // Toggle Button Logic
+    toggleAngleBtn.addEventListener('click', () => {
+        showSupplementary = !showSupplementary;
+        if (showSupplementary) {
+            toggleAngleBtn.classList.add('active');
+        } else {
+            toggleAngleBtn.classList.remove('active');
+        }
+        draw();
+    });
+
+    // Touch/Mouse Logic
     function getPos(e) {
         const rect = canvas.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -198,9 +238,7 @@
     }
 
     function isOverPoint(pos) {
-        return points.findIndex(p => {
-            return Math.sqrt((p.x - pos.x)**2 + (p.y - pos.y)**2) < 30;
-        });
+        return points.findIndex(p => Math.sqrt((p.x - pos.x)**2 + (p.y - pos.y)**2) < 30);
     }
 
     const startHandler = (e) => {
