@@ -3,17 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GonioApp</title>
+    <title>GoniOdyssey</title>
     <link rel="manifest" href="manifest.json">
     <style>
         body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; background: #222; font-family: sans-serif; color: white; overflow: hidden; }
         
-        /* Toolbar ajustée pour 4 boutons */
         #toolbar { padding: 10px; background: #333; display: flex; gap: 8px; justify-content: space-around; align-items: center; z-index: 10; }
         
         button, label { background: #007AFF; color: white; border: none; padding: 10px; border-radius: 5px; font-size: 13px; cursor: pointer; text-align: center; flex: 1; display: flex; justify-content: center; align-items: center; }
         
-        /* Couleurs spécifiques */
         label.camera { background: #007AFF; }
         label.gallery { background: #5856D6; }
         button.danger { background: #FF3B30; }
@@ -22,7 +20,6 @@
         #canvas-container { flex-grow: 1; position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center; background: #000; }
         canvas { max-width: 100%; max-height: 100%; touch-action: none; }
         
-        /* Masquer les inputs natifs */
         input[type="file"] { display: none; }
     </style>
 </head>
@@ -44,7 +41,6 @@
 </div>
 
 <script>
-    // --- Configuration PWA ---
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js');
     }
@@ -52,7 +48,6 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     
-    // Récupération des deux inputs
     const cameraInput = document.getElementById('cameraInput');
     const galleryInput = document.getElementById('galleryInput');
     
@@ -60,25 +55,22 @@
     let points = []; 
     let draggingPointIdx = -1;
     
-    // --- Gestion Image (Fonction unique pour les deux inputs) ---
     const handleImageLoad = (e) => {
         if (e.target.files && e.target.files[0]) {
             const reader = new FileReader();
             reader.onload = (evt) => {
                 img.onload = () => {
                     resizeCanvas();
-                    points = []; // Reset des points
+                    points = []; 
                     draw();
                 };
                 img.src = evt.target.result;
             }
             reader.readAsDataURL(e.target.files[0]);
         }
-        // Reset de l'input pour permettre de re-sélectionner la même image si besoin
         e.target.value = ''; 
     };
 
-    // Écouteurs sur les deux boutons
     cameraInput.addEventListener('change', handleImageLoad);
     galleryInput.addEventListener('change', handleImageLoad);
 
@@ -100,7 +92,6 @@
     
     window.addEventListener('resize', resizeCanvas);
 
-    // --- Logique Mathématique (Théorème d'Al-Kashi / Produit Scalaire) ---
     function getAngle(p1, p2, p3) {
         const BA = { x: p1.x - p2.x, y: p1.y - p2.y };
         const BC = { x: p3.x - p2.x, y: p3.y - p2.y };
@@ -117,16 +108,13 @@
         return angleDeg.toFixed(1);
     }
 
-    // --- Rendu Graphique ---
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // 1. Image
         if (img.src) {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         }
 
-        // 2. Date
         const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
         ctx.font = "bold 20px Arial";
         ctx.fillStyle = "white";
@@ -135,7 +123,6 @@
         ctx.fillText(date, 10, 30);
         ctx.shadowBlur = 0;
 
-        // 3. Lignes
         if (points.length > 1) {
             ctx.beginPath();
             ctx.strokeStyle = "yellow";
@@ -147,7 +134,6 @@
             ctx.stroke();
         }
 
-        // 4. Angle
         if (points.length === 3) {
             const angle = getAngle(points[0], points[1], points[2]);
             
@@ -163,7 +149,6 @@
             ctx.stroke();
         }
 
-        // 5. Points
         points.forEach((p, index) => {
             ctx.beginPath();
             ctx.fillStyle = index === 1 ? "red" : "#007AFF";
@@ -175,7 +160,6 @@
         });
     }
 
-    // --- Interactions ---
     function getPos(e) {
         const rect = canvas.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -195,7 +179,7 @@
 
     const startHandler = (e) => {
         if (!img.src) return;
-        if (e.cancelable) e.preventDefault(); // Empêche le scroll sur mobile
+        if (e.cancelable) e.preventDefault();
         const pos = getPos(e);
         const idx = isOverPoint(pos);
 
@@ -219,17 +203,14 @@
         draggingPointIdx = -1;
     };
 
-    // Events
     canvas.addEventListener('mousedown', startHandler);
     canvas.addEventListener('mousemove', moveHandler);
     canvas.addEventListener('mouseup', endHandler);
     
-    // Passive: false est crucial pour empêcher le défilement de la page pendant le dessin
     canvas.addEventListener('touchstart', startHandler, {passive: false});
     canvas.addEventListener('touchmove', moveHandler, {passive: false});
     canvas.addEventListener('touchend', endHandler);
 
-    // Boutons Actions
     document.getElementById('clearBtn').addEventListener('click', () => {
         points = [];
         draw();
@@ -238,7 +219,7 @@
     document.getElementById('saveBtn').addEventListener('click', () => {
         if (!img.src) return alert("Image manquante");
         const link = document.createElement('a');
-        link.download = `gonio-${Date.now()}.jpg`;
+        link.download = `GoniOdyssey-${Date.now()}.jpg`; // Nom fichier mis à jour
         link.href = canvas.toDataURL('image/jpeg', 0.9);
         link.click();
     });
